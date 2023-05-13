@@ -1,0 +1,1 @@
+void hci_event_code_str(uint8_t event_code, char* output);
