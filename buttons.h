@@ -1,0 +1,22 @@
+#include "pico/stdlib.h"
+
+#define BTN_MIN_PIN 18
+#define PAIR_BTN_PIN 18
+#define PLAY_CTRL_BTN_PIN 19
+#define VOL_UP_BTN_PIN 20
+#define VOL_DOWN_BTN_PIN 21
+
+#define BTN_PRESS 1
+#define BTN_RELEASE 0
+
+#define DEBOUNCE_TIME_MS 100
+#define LONG_PRESS_TIME_MS 3000
+
+typedef struct {
+    int8_t pin;
+    absolute_time_t pressed_at;
+    absolute_time_t released_at;
+} button_t;
+
+void btn_debounce(uint8_t pin, uint32_t event_mask, int8_t *confirm_pin, uint8_t *btn_action);
+void btn_create_array(button_t *btns, uint8_t count);

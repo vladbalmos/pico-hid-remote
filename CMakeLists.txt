@@ -15,6 +15,8 @@ add_compile_options(-Wall
 
 add_executable(bt-experiments
     debug.c
+    bt.c
+    buttons.c
     main.c
 )
 
@@ -24,11 +26,25 @@ pico_enable_stdio_uart(bt-experiments 1)
 # pull in common dependencies
 target_link_libraries(bt-experiments
     pico_stdlib
-    pico_btstack_ble
     pico_btstack_classic
     pico_btstack_cyw43
     pico_cyw43_arch_none
     )
+
+if(DEFINED ENV{DEBUG_MODE})
+    target_compile_definitions(bt-experiments PUBLIC
+        DEBUG_MODE
+    )
+endif()
+
+if(DEFINED ENV{BT_DEBUG_MODE})
+    target_compile_definitions(bt-experiments PUBLIC
+        ENABLE_LOG_DEBUG
+        ENABLE_LOG_INFO
+        ENABLE_LOG_ERROR
+        BT_DEBUG_MODE
+    )
+endif()
 
 target_include_directories(bt-experiments PRIVATE
     ${CMAKE_CURRENT_LIST_DIR} # For btstack config
