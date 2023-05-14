@@ -17,6 +17,7 @@ add_executable(bt-experiments
     debug.c
     bt.c
     buttons.c
+    control.c
     main.c
 )
 
@@ -26,6 +27,7 @@ pico_enable_stdio_uart(bt-experiments 1)
 # pull in common dependencies
 target_link_libraries(bt-experiments
     pico_stdlib
+    pico_malloc
     pico_btstack_classic
     pico_btstack_cyw43
     pico_cyw43_arch_none

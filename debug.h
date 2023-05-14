@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 #ifdef DEBUG_MODE
     #define DEBUG(...) printf(__VA_ARGS__);
 #else

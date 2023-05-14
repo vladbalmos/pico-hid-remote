@@ -7,12 +7,16 @@
 #include <stdio.h>
 #include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
+#include "pico/util/queue.h"
 #include "debug.h"
 #include "bt.h"
 #include "buttons.h"
+#include "control.h"
 
 static uint8_t pins[] = {FN_BTN_PIN, PLAY_CTRL_BTN_PIN, VOL_UP_BTN_PIN, VOL_DOWN_BTN_PIN};
 static button_t btns[4];
+static queue_t ctrl_ev_w_queue;
+static queue_t ctrl_ev_r_queue;
 
 static button_t *get_btn(uint8_t pin) {
     button_t *btn;
@@ -41,14 +45,13 @@ static void gpio_irq_handler(uint gpio, uint32_t event) {
     btn->pin = btn_pin;
     
     if (btn_action == BTN_PRESS) {
-        btn->long_press = 0;
         btn->pressed_at = get_absolute_time();
         btn->released_at = nil_time;
     } else {
         btn->released_at = get_absolute_time();
     }
 
-    printf("Presed_at %llu. Released at %llu\n", btn->pressed_at, btn->released_at);
+    DEBUG("Btn %d. Presed at %llu. Released at %llu\n", btn->pin, btn->pressed_at, btn->released_at);
 }
 
 int main() {
@@ -68,44 +71,51 @@ int main() {
         gpio_set_irq_enabled_with_callback(pins[i], GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
     }
     
+    queue_init(&ctrl_ev_w_queue, sizeof(ctrl_ev_t), 10);
+    queue_init(&ctrl_ev_r_queue, sizeof(ctrl_ev_t), 10);
+    
     // init btstack
-    bt_init();
+    bt_init(&ctrl_ev_r_queue, &ctrl_ev_w_queue);
+    ctrl_init(&ctrl_ev_w_queue, &ctrl_ev_r_queue);
     
     button_t *btn;
     absolute_time_t fn_btn_last_release = nil_time;
-    
+
     while (1) {
+        bt_process_queue();
+        ctrl_process_queue();
         btn = get_btn(FN_BTN_PIN);
 
         if (btn_is_pressed(btn)) {
             if (btn_is_long_press(btn))  {
-                printf("START PAIRING %d\n", btn->pin);
+                ctrl_make_discoverable(1);
             } else if (btn_is_double_press(btn, &fn_btn_last_release)) {
-                printf("DOUBLE PRESS %d\n", btn->pin);
+                ctrl_connect();
             }
             goto SLEEP;
         }
+        
         if (btn_is_released(btn) && fn_btn_last_release == nil_time) {
             fn_btn_last_release = get_absolute_time();
         }
         
         btn = get_btn(PLAY_CTRL_BTN_PIN);
         if (btn_is_pressed(btn)) {
-            printf("TOGGLE PLAY/PAUSE\n");
+            ctrl_toggle_play_pause();
             btn_handled(btn, nil_time);
             goto SLEEP;
         }
 
         btn = get_btn(VOL_UP_BTN_PIN);
         if (btn_is_pressed(btn)) {
-            printf("VOLUME UP\n");
+            ctrl_vol_up();
             btn_handled(btn, nil_time);
             goto SLEEP;
         }
 
         btn = get_btn(VOL_DOWN_BTN_PIN);
         if (btn_is_pressed(btn)) {
-            printf("VOLUME DOWN\n");
+            ctrl_vol_down();
             btn_handled(btn, nil_time);
             goto SLEEP;
         }

@@ -16,8 +16,6 @@
 
 typedef struct {
     int8_t pin;
-    uint8_t long_press;
-    uint8_t double_press;
     absolute_time_t pressed_at;
     absolute_time_t released_at;
 } button_t;
