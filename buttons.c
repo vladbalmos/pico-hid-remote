@@ -7,11 +7,15 @@ static uint8_t btn_state[] = {BTN_RELEASE, BTN_RELEASE, BTN_RELEASE, BTN_RELEASE
 static absolute_time_t debounce_due_press[] = {0, 0, 0, 0};
 static absolute_time_t debounce_due_release[] = {0, 0, 0, 0};
 
+uint8_t btn_get_index(uint8_t pin) {
+    return pin - BTN_MIN_PIN;
+}
+
 void btn_debounce(uint8_t pin, uint32_t event_mask, int8_t *confirm_pin, uint8_t *btn_action) {
     absolute_time_t *debounce_due = NULL;
     absolute_time_t _debounce_due;
     absolute_time_t now = get_absolute_time();
-    uint8_t btn_index = pin - BTN_MIN_PIN;
+    uint8_t btn_index = btn_get_index(pin);
     uint8_t last_state = btn_state[btn_index];
     uint8_t new_state = (event_mask == GPIO_IRQ_EDGE_RISE) ? BTN_PRESS : BTN_RELEASE;
     
