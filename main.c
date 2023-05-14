@@ -41,6 +41,7 @@ static void gpio_irq_handler(uint gpio, uint32_t event) {
     btn->pin = btn_pin;
     
     if (btn_action == BTN_PRESS) {
+        btn->long_press = 0;
         btn->pressed_at = get_absolute_time();
         btn->released_at = nil_time;
     } else {
@@ -70,8 +71,47 @@ int main() {
     // init btstack
     bt_init();
     
+    button_t *btn;
+    absolute_time_t fn_btn_last_release = nil_time;
+    
     while (1) {
-        sleep_ms(100);
+        btn = get_btn(FN_BTN_PIN);
+
+        if (btn_is_pressed(btn)) {
+            if (btn_is_long_press(btn))  {
+                printf("START PAIRING %d\n", btn->pin);
+            } else if (btn_is_double_press(btn, &fn_btn_last_release)) {
+                printf("DOUBLE PRESS %d\n", btn->pin);
+            }
+            goto SLEEP;
+        }
+        if (btn_is_released(btn) && fn_btn_last_release == nil_time) {
+            fn_btn_last_release = get_absolute_time();
+        }
+        
+        btn = get_btn(PLAY_CTRL_BTN_PIN);
+        if (btn_is_pressed(btn)) {
+            printf("TOGGLE PLAY/PAUSE\n");
+            btn_handled(btn, nil_time);
+            goto SLEEP;
+        }
+
+        btn = get_btn(VOL_UP_BTN_PIN);
+        if (btn_is_pressed(btn)) {
+            printf("VOLUME UP\n");
+            btn_handled(btn, nil_time);
+            goto SLEEP;
+        }
+
+        btn = get_btn(VOL_DOWN_BTN_PIN);
+        if (btn_is_pressed(btn)) {
+            printf("VOLUME DOWN\n");
+            btn_handled(btn, nil_time);
+            goto SLEEP;
+        }
+        
+        SLEEP:
+            sleep_ms(10);
     }
     cyw43_arch_deinit();
     return 0;

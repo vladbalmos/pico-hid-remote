@@ -4,15 +4,13 @@
 
 
 static uint8_t btn_state[] = {BTN_RELEASE, BTN_RELEASE, BTN_RELEASE, BTN_RELEASE};
-static absolute_time_t debounce_due_press[] = {0, 0, 0, 0};
-static absolute_time_t debounce_due_release[] = {0, 0, 0, 0};
+static absolute_time_t debounce_due[] = {0, 0, 0, 0};
 
 uint8_t btn_get_index(uint8_t pin) {
     return pin - BTN_MIN_PIN;
 }
 
 void btn_debounce(uint8_t pin, uint32_t event_mask, int8_t *confirm_pin, uint8_t *btn_action) {
-    absolute_time_t *debounce_due = NULL;
     absolute_time_t _debounce_due;
     absolute_time_t now = get_absolute_time();
     uint8_t btn_index = btn_get_index(pin);
@@ -21,12 +19,6 @@ void btn_debounce(uint8_t pin, uint32_t event_mask, int8_t *confirm_pin, uint8_t
     
     if (last_state == new_state) {
         return;
-    }
-    
-    if (new_state == BTN_PRESS) {
-        debounce_due = debounce_due_press;
-    } else {
-        debounce_due = debounce_due_release;
     }
     
     _debounce_due = debounce_due[btn_index];
@@ -51,4 +43,47 @@ void btn_create_array(button_t *btns, uint8_t btn_count) {
         
         btns[i] = btn;
     }
+}
+
+void btn_handled(button_t *btn, absolute_time_t now) {
+    if (now == nil_time) {
+        now = get_absolute_time();
+    }
+    btn->pressed_at = nil_time;
+    btn->released_at = now;
+}
+
+uint8_t btn_is_pressed(button_t *btn) {
+    return (btn->pressed_at != nil_time && btn->released_at == nil_time);
+}
+
+uint8_t btn_is_released(button_t *btn) {
+    return btn->released_at != nil_time;
+}
+
+uint8_t btn_is_long_press(button_t *btn) {
+    if (btn->released_at) {
+        return 0;
+    }
+    
+    absolute_time_t now = get_absolute_time();
+    uint32_t diff = absolute_time_diff_us(btn->pressed_at, now) / 1000;
+    
+    if (diff >= LONG_PRESS_TIME_MS) {
+        btn_handled(btn, now);
+        return 1;
+    }
+    
+    return 0;
+}
+
+uint8_t btn_is_double_press(button_t *btn, absolute_time_t *last_release) {
+    if (*last_release == nil_time) {
+        return 0;
+    }
+    absolute_time_t now = get_absolute_time();
+    
+    uint32_t diff = absolute_time_diff_us(*last_release, now) / 1000;
+    *last_release = nil_time;
+    return (diff <= DOUBLE_PRESS_TIME_MS);
 }
