@@ -18,10 +18,10 @@ clean:
 	rm -rf bt-debug
 
 install: build
-	cd build && pico-install.sh bt-experiments
+	cd build && pico-install.sh hidremote
 
 install-debug: debug
-	cd debug && pico-install.sh bt-experiments
+	cd debug && pico-install.sh hidremote
 
 install-bt-debug: bt-debug
-	cd bt-debug && pico-install.sh bt-experiments
+	cd bt-debug && pico-install.sh hidremote

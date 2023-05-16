@@ -8,11 +8,10 @@
 static queue_t *ctrl_ev_w_queue = NULL;
 static queue_t *ctrl_ev_r_queue = NULL;
 
-static bd_addr_t remote_addr;
-static uint8_t is_paired = 0;
+static uint8_t is_paired = 1;
 static uint8_t is_discoverable = 0;
 
-static uint8_t is_connected = 0;
+static uint8_t is_connected = 1;
 static uint8_t connecting = 0;
 
 static alarm_id_t check_pairing_status_alarm;
@@ -25,15 +24,6 @@ int64_t check_pairing_status(alarm_id_t id, void *user_data) {
     if (!is_paired) {
         ctrl_make_discoverable(0);
     }
-    
-    return 0;
-}
-
-int64_t delay_ctrl_connect(alarm_id_t id, void *user_data) {
-    UNUSED(id);
-    UNUSED(user_data);
-    
-    ctrl_connect();
     
     return 0;
 }
@@ -64,7 +54,6 @@ void ctrl_process_queue() {
                 is_discoverable = 0;
                 is_paired = 1;
                 cancel_alarm(check_pairing_status_alarm);
-                add_alarm_in_ms(DELAY_AVRCP_CONNECTION_AFTER_PAIR_MS, delay_ctrl_connect, NULL, false);
                 break;
             }
 
@@ -78,13 +67,6 @@ void ctrl_process_queue() {
                 break;
             }
                                           
-            case CTRL_EV_REQ_CONNECTION_FAILED: {
-                uint8_t status = *(uint8_t *) ev.data;
-                free(ev.data);
-                DEBUG("AVRCP Connection failed, status 0x%02x\n", status);
-                break;
-            }
-                                                
             case CTRL_EV_DISCONNECTED: {
                 uint8_t reason = *(uint8_t *) ev.data;
                 free(ev.data);

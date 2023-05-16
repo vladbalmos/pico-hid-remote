@@ -1,163 +1,111 @@
 #include "pico/util/queue.h"
+#include "hidremote.h"
 #include "btstack.h"
 #include "control.h"
 #include "debug.h"
+
+#define KEY_PLAY_PAUSE 0xCD
+#define KEY_VOL_UP 0xE9
+#define KEY_VOL_DOWN 0xEA
 
 static queue_t *ctrl_ev_w_queue = NULL;
 static queue_t *ctrl_ev_r_queue = NULL;
 
 static btstack_packet_callback_registration_t hci_event_callback_registration;
+static btstack_packet_callback_registration_t sm_event_callback_registration;
+static uint8_t battery = 100;
+static hci_con_handle_t con_handle = HCI_CON_HANDLE_INVALID;
+static uint8_t protocol_mode = 1;
+static uint8_t send_keycode;
 
-static uint16_t avrcp_cid = 0;
-static bool     avrcp_connected = false;
-static bd_addr_t remote_addr;
-static bd_addr_t local_addr;
+// https://github.com/adafruit/circuitpython/blob/9e4dea7b15f3b4108be00f7aaffaa24f38aca978/shared-module/usb_hid/Device.c
+const uint8_t hid_descriptor[] = {
+    0x05, 0x0C,        // Usage Page (Consumer)
+    0x09, 0x01,        // Usage (Consumer Control)
+    0xA1, 0x01,        // Collection (Application)
+    0x85, 0x01,        //   Report ID (3)
+    0x75, 0x10,        //   Report Size (16)
+    0x95, 0x01,        //   Report Count (1)
+    0x15, 0x01,        //   Logical Minimum (1)
+    0x26, 0x8C, 0x02,  //   Logical Maximum (652)
+    0x19, 0x01,        //   Usage Minimum (Consumer Control)
+    0x2A, 0x8C, 0x02,  //   Usage Maximum (AC Send)
+    0x81, 0x00,        //   Input (Data,Array,Abs,No Wrap,Linear,Preferred State,No Null Position)
+    0xC0,              // End Collection
+};
 
-static uint8_t  sdp_avrcp_controller_service_buffer[200];
-static uint8_t device_id_sdp_service_buffer[100];
+const uint8_t adv_data[] = {
+    // Flags general discoverable, BR/EDR not supported
+    0x02, BLUETOOTH_DATA_TYPE_FLAGS, 0x06,
+    // Name
+    0x0d, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME, 'H', 'I', 'D', ' ', 'K', 'e', 'y', 'b', 'o', 'a', 'r', 'd',
+    // 16-bit Service UUIDs
+    0x03, BLUETOOTH_DATA_TYPE_COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS, ORG_BLUETOOTH_SERVICE_HUMAN_INTERFACE_DEVICE & 0xff, ORG_BLUETOOTH_SERVICE_HUMAN_INTERFACE_DEVICE >> 8,
+    // Appearance HID - Keyboard (Category 15, Sub-Category 1)
+    0x03, BLUETOOTH_DATA_TYPE_APPEARANCE, 0xC1, 0x03,
+};
 
-static uint8_t playing_state = 1;
+const uint8_t adv_data_len = sizeof(adv_data);
 
-static void avrcp_packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) {
-    UNUSED(size);
-    UNUSED(channel);
 
-    bd_addr_t address;
-    uint16_t local_cid;
-    uint8_t  status = 0xFF;
-
-    if (packet_type != HCI_EVENT_PACKET) {
-        return;
-    }
-
-    uint8_t hci_event_type = hci_event_packet_get_type(packet);
-    
-    if (hci_event_type != HCI_EVENT_AVRCP_META) {
-        return;
-    }
-    
-#ifdef DEBUG_MODE
-    char str_packet[64];
-    hci_event_code_str(packet[2], str_packet);
-    DEBUG("AVR Packet %s\n", str_packet);
-#endif
-
-    switch (packet[2]) {
-        case AVRCP_SUBEVENT_CONNECTION_ESTABLISHED: {
-            local_cid = avrcp_subevent_connection_established_get_avrcp_cid(packet);
-            status = avrcp_subevent_connection_established_get_status(packet);
-            if (status != ERROR_CODE_SUCCESS){
-                avrcp_cid = 0;
-
-                uint8_t *status_ptr = malloc(sizeof(uint8_t));
-                *status_ptr = status;
-
-                ctrl_ev_t ev = ctrl_make_event(CTRL_EV_REQ_CONNECTION_FAILED, status_ptr);
-                queue_try_add(ctrl_ev_w_queue, &ev);
-                return;
-            }
-            
-            avrcp_cid = local_cid;
-            avrcp_connected = true;
-            avrcp_controller_pause(avrcp_cid);
-            avrcp_subevent_connection_established_get_bd_addr(packet, address);
-            DEBUG("AVRCP: Connected to %s, cid 0x%02x\n", bd_addr_to_str(address), avrcp_cid);
-            return;
-        }
-        
-        case AVRCP_SUBEVENT_CONNECTION_RELEASED: {
-            DEBUG("AVRCP: Channel released: cid 0x%02x\n", avrcp_subevent_connection_released_get_avrcp_cid(packet));
-            avrcp_cid = 0;
-            avrcp_connected = false;
-            return;
-        }
-
-        case AVRCP_SUBEVENT_NOTIFICATION_PLAYBACK_STATUS_CHANGED: {
-            DEBUG("AVRCP Controller: Playback status changed %s\n", avrcp_play_status2str(avrcp_subevent_notification_playback_status_changed_get_play_status(packet)));
-            uint8_t play_status = avrcp_subevent_notification_playback_status_changed_get_play_status(packet);
-            DEBUG("PLAY STATUS: %d\n", play_status);
+static void send_report(uint8_t keycode){
+    uint8_t report[] = { keycode, 0};
+    switch (protocol_mode){
+        case 0:
+            hids_device_send_boot_keyboard_input_report(con_handle, report, sizeof(report));
             break;
-        }
-
+        case 1:
+           hids_device_send_input_report(con_handle, report, sizeof(report));
+           break;
         default:
             break;
-        
     }
 }
 
 static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
-    UNUSED(size);
     UNUSED(channel);
-    
-    uint16_t local_cid;
-    uint8_t  status = 0xFF;
-    hci_con_handle_t con_handle;
-         
-    if (packet_type != HCI_EVENT_PACKET) {
-        return;
-    }
-    
-    uint8_t hci_event_type = hci_event_packet_get_type(packet);
+    UNUSED(size);
 
-#ifdef DEBUG_MODE
-    char str_packet[64];
-    hci_event_code_str(hci_event_type, str_packet);
-    DEBUG("Packet %s\n", str_packet);
-#endif
-    
-    switch(hci_event_type){
-        case BTSTACK_EVENT_STATE: {
-            if (btstack_event_state_get_state(packet) != HCI_STATE_WORKING) {
-                return;
+    if (packet_type != HCI_EVENT_PACKET) return;
+
+    switch (hci_event_packet_get_type(packet)) {
+        case HCI_EVENT_DISCONNECTION_COMPLETE:
+            con_handle = HCI_CON_HANDLE_INVALID;
+            printf("Disconnected\n");
+            break;
+        case SM_EVENT_JUST_WORKS_REQUEST:
+            printf("Just Works requested\n");
+            sm_just_works_confirm(sm_event_just_works_request_get_handle(packet));
+            break;
+        case SM_EVENT_NUMERIC_COMPARISON_REQUEST:
+            printf("Confirming numeric comparison: %d\n", sm_event_numeric_comparison_request_get_passkey(packet));
+            sm_numeric_comparison_confirm(sm_event_passkey_display_number_get_handle(packet));
+            break;
+        case SM_EVENT_PASSKEY_DISPLAY_NUMBER:
+            printf("Display Passkey: %d\n", sm_event_passkey_display_number_get_passkey(packet));
+            break;
+        case HCI_EVENT_HIDS_META:
+            switch (hci_event_hids_meta_get_subevent_code(packet)){
+                case HIDS_SUBEVENT_INPUT_REPORT_ENABLE:
+                    con_handle = hids_subevent_input_report_enable_get_con_handle(packet);
+                    printf("Report Characteristic Subscribed %u\n", hids_subevent_input_report_enable_get_enable(packet));
+                    break;
+                case HIDS_SUBEVENT_BOOT_KEYBOARD_INPUT_REPORT_ENABLE:
+                    con_handle = hids_subevent_boot_keyboard_input_report_enable_get_con_handle(packet);
+                    printf("Boot Keyboard Characteristic Subscribed %u\n", hids_subevent_boot_keyboard_input_report_enable_get_enable(packet));
+                    break;
+                case HIDS_SUBEVENT_PROTOCOL_MODE:
+                    protocol_mode = hids_subevent_protocol_mode_get_protocol_mode(packet);
+                    printf("Protocol Mode: %s mode\n", hids_subevent_protocol_mode_get_protocol_mode(packet) ? "Report" : "Boot");
+                    break;
+                case HIDS_SUBEVENT_CAN_SEND_NOW:
+                    send_report(send_keycode);
+                    break;
+                default:
+                    break;
             }
-            gap_local_bd_addr(local_addr);
-            DEBUG("BTstack up and running on %s.\n", bd_addr_to_str(local_addr));
             break;
-        }
             
-        case HCI_EVENT_PIN_CODE_REQUEST: {
-            bd_addr_t address;
-            hci_event_pin_code_request_get_bd_addr(packet, address);
-            gap_pin_code_response(address, "0000");
-            break;
-        }
-
-        case HCI_EVENT_USER_CONFIRMATION_REQUEST: {
-            bd_addr_t address;
-            hci_event_user_confirmation_request_get_bd_addr(packet, address);
-            hci_send_cmd(&hci_user_confirmation_request_reply, address);
-            break;
-        }
-                                                  
-        case HCI_EVENT_SIMPLE_PAIRING_COMPLETE: {
-            bd_addr_t *address = malloc(sizeof(bd_addr_t));
-            hci_event_simple_pairing_complete_get_bd_addr(packet, remote_addr);
-
-            bd_addr_copy(address[0], remote_addr);
-            
-            ctrl_ev_t paired_ev = ctrl_make_event(CTRL_EV_PAIRING_SUCCESS, address);
-            queue_try_add(ctrl_ev_w_queue, &paired_ev);
-            gap_discoverable_control(0);
-            break;
-        }
-                                                
-        case HCI_EVENT_CONNECTION_COMPLETE: {
-            ctrl_ev_t ev = ctrl_make_event(CTRL_EV_CONNECTED, NULL);
-            queue_try_add(ctrl_ev_w_queue, &ev);
-            break;
-        }
-                                                
-        case HCI_EVENT_DISCONNECTION_COMPLETE: {
-            con_handle = hci_event_disconnection_complete_get_connection_handle(packet);
-
-            uint8_t *reason_ptr = malloc(sizeof(uint8_t));
-            *reason_ptr = hci_event_disconnection_complete_get_reason(packet);                    
-
-            ctrl_ev_t ev = ctrl_make_event(CTRL_EV_DISCONNECTED, reason_ptr);
-            queue_try_add(ctrl_ev_w_queue, &ev);
-            break;
-        }
-
         default:
             break;
     }
@@ -169,45 +117,43 @@ void bt_init(queue_t *write_queue, queue_t *read_queue) {
 
     l2cap_init();
 
-    avrcp_init();
-    avrcp_register_packet_handler(&avrcp_packet_handler);
+    // setup SM: Display only
+    sm_init();
+    sm_set_io_capabilities(IO_CAPABILITY_NO_INPUT_NO_OUTPUT);
+    sm_set_authentication_requirements(SM_AUTHREQ_SECURE_CONNECTION | SM_AUTHREQ_BONDING);
 
-    avrcp_controller_init();
-    avrcp_controller_register_packet_handler(&avrcp_packet_handler);
+    // setup ATT server
+    att_server_init(profile_data, NULL, NULL);
 
-    avrcp_target_init();
-    avrcp_target_register_packet_handler(&avrcp_packet_handler);
+    // setup battery service
+    battery_service_server_init(battery);
 
-    sdp_init();
-    
-    memset(sdp_avrcp_controller_service_buffer, 0, sizeof(sdp_avrcp_controller_service_buffer));
-    uint16_t supported_features = AVRCP_FEATURE_MASK_CATEGORY_MONITOR_OR_AMPLIFIER;
-    avrcp_controller_create_sdp_record(sdp_avrcp_controller_service_buffer, 0x10001, supported_features, "AVRCP Controller", "AVRCP");
-    sdp_register_service(sdp_avrcp_controller_service_buffer);
-    
-    // Register Device ID (PnP) service SDP record
-    memset(device_id_sdp_service_buffer, 0, sizeof(device_id_sdp_service_buffer));
-    device_id_create_sdp_record(device_id_sdp_service_buffer, 0x10002, DEVICE_ID_VENDOR_ID_SOURCE_BLUETOOTH, BLUETOOTH_COMPANY_ID_BLUEKITCHEN_GMBH, 1, 1);
-    sdp_register_service(device_id_sdp_service_buffer);
+    // setup device information service
+    device_information_service_server_init();
 
-    gap_set_local_name("Pico Remote Control 00:00:00:00:00:00");
+    // setup HID Device service
+    hids_device_init(0, hid_descriptor, sizeof(hid_descriptor));
 
-    // uint32_t class_of_device = 0x20050C;
-    // uint32_t class_of_device = 0x200418;
-    uint32_t class_of_device = 0x200408;
-    gap_set_class_of_device(class_of_device);
-    
+    // setup advertisements
+    uint16_t adv_int_min = 0x0030;
+    uint16_t adv_int_max = 0x0030;
+    uint8_t adv_type = 0;
+    bd_addr_t null_addr;
+    memset(null_addr, 0, 6);
+    gap_advertisements_set_params(adv_int_min, adv_int_max, adv_type, 0, null_addr, 0x07, 0x00);
+    gap_advertisements_set_data(adv_data_len, (uint8_t*) adv_data);
+    gap_advertisements_enable(1);
 
-    gap_ssp_set_io_capability(SSP_IO_CAPABILITY_NO_INPUT_NO_OUTPUT);
-
-    // allow for role switch in general and sniff mode
-    gap_set_default_link_policy_settings(LM_LINK_POLICY_ENABLE_ROLE_SWITCH | LM_LINK_POLICY_ENABLE_SNIFF_MODE);
-
-    // allow for role switch on outgoing connections - this allows A2DP Source, e.g. smartphone, to become master when we re-connect to it
-    gap_set_allow_role_switch(true);
-    
+    // register for HCI events
     hci_event_callback_registration.callback = &packet_handler;
     hci_add_event_handler(&hci_event_callback_registration);
+
+    // register for SM events
+    sm_event_callback_registration.callback = &packet_handler;
+    sm_add_event_handler(&sm_event_callback_registration);
+
+    // register for HIDS
+    hids_device_register_packet_handler(packet_handler);
 
 #ifdef BT_DEBUG_MODE
     hci_dump_init(hci_dump_embedded_stdout_get_instance());
@@ -224,45 +170,31 @@ void bt_process_queue() {
             case CTRL_EV_MAKE_DISCOVERABLE: {
                 uint8_t state = *(uint8_t *) ev.data;
                 free(ev.data);
-
                 DEBUG("Making discoverable %d\n", state);
-                gap_discoverable_control(state);
-                gap_connectable_control(state);
                 break;
             }
 
-            case CTRL_EV_REQUEST_CONNECTION: {
-                if (!avrcp_cid) {
-                    DEBUG("-------------CONNECTING-------------------\n");
-                    uint8_t result = avrcp_connect(remote_addr, &avrcp_cid);
-                    if (result != ERROR_CODE_SUCCESS) {
-                        uint8_t *status_ptr = malloc(sizeof(uint8_t));
-                        *status_ptr = result;
-
-                        ctrl_ev_t con_failed_ev = ctrl_make_event(CTRL_EV_REQ_CONNECTION_FAILED, status_ptr);
-                        queue_try_add(ctrl_ev_w_queue, &con_failed_ev);
-                    }
-                }
-                break;
-            }
-                
             case CTRL_EV_REQUEST_TOGGLE_PLAY:
-                if (playing_state) {
-                    DEBUG("Requesting toggle play/pause %d\n", avrcp_controller_pause(avrcp_cid));
-                    playing_state = 0;
-                } else {
-                    DEBUG("Requesting toggle play/pause %d\n", avrcp_controller_play(avrcp_cid));
-                    playing_state = 1;
-                }
+                DEBUG("Requesting toggle play/pause\n");
+                send_keycode = KEY_PLAY_PAUSE;
+                hids_device_request_can_send_now_event(con_handle);
+                send_keycode = 0;
+                hids_device_request_can_send_now_event(con_handle);
             break;
 
             case CTRL_EV_REQUEST_VOL_UP:
-                DEBUG("Requesting vol up %d\n", avrcp_controller_volume_up(avrcp_cid));
+                DEBUG("Requesting vol up\n");
+                send_keycode = KEY_VOL_UP;
+                hids_device_request_can_send_now_event(con_handle);
+                send_keycode = 0;
+                hids_device_request_can_send_now_event(con_handle);
             break;
             case CTRL_EV_REQUEST_VOL_DOWN:
-                // DEBUG("Requesting vol down %d\n", avrcp_controller_volume_down(avrcp_cid));
-                DEBUG("Requesting vol down %d\n", avrcp_controller_mute(avrcp_cid));
-                // DEBUG("Requesting vol down %d\n", avrcp_controller_set_absolute_volume(avrcp_cid, 0));
+                DEBUG("Requesting vol down\n");
+                send_keycode = KEY_VOL_DOWN;
+                hids_device_request_can_send_now_event(con_handle);
+                send_keycode = 0;
+                hids_device_request_can_send_now_event(con_handle);
             break;
         }
     }
