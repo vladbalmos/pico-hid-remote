@@ -15,7 +15,6 @@ static btstack_packet_callback_registration_t hci_event_callback_registration;
 static btstack_packet_callback_registration_t sm_event_callback_registration;
 static uint8_t battery = 100;
 static hci_con_handle_t con_handle = HCI_CON_HANDLE_INVALID;
-static uint8_t protocol_mode = 1;
 static uint8_t send_keycode;
 
 // https://github.com/adafruit/circuitpython/blob/9e4dea7b15f3b4108be00f7aaffaa24f38aca978/shared-module/usb_hid/Device.c
@@ -38,7 +37,7 @@ const uint8_t adv_data[] = {
     // Flags general discoverable, BR/EDR not supported
     0x02, BLUETOOTH_DATA_TYPE_FLAGS, 0x06,
     // Name
-    0x0d, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME, 'H', 'I', 'D', ' ', 'K', 'e', 'y', 'b', 'o', 'a', 'r', 'd',
+    0x0f, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME, 'P', 'I', 'C', 'O', ' ', 'H', 'I', 'D', 'R', 'e', 'm', 'o', 't', 'e',
     // 16-bit Service UUIDs
     0x03, BLUETOOTH_DATA_TYPE_COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS, ORG_BLUETOOTH_SERVICE_HUMAN_INTERFACE_DEVICE & 0xff, ORG_BLUETOOTH_SERVICE_HUMAN_INTERFACE_DEVICE >> 8,
     // Appearance HID - Keyboard (Category 15, Sub-Category 1)
@@ -50,16 +49,7 @@ const uint8_t adv_data_len = sizeof(adv_data);
 
 static void send_report(uint8_t keycode){
     uint8_t report[] = { keycode, 0};
-    switch (protocol_mode){
-        case 0:
-            hids_device_send_boot_keyboard_input_report(con_handle, report, sizeof(report));
-            break;
-        case 1:
-           hids_device_send_input_report(con_handle, report, sizeof(report));
-           break;
-        default:
-            break;
-    }
+    hids_device_send_input_report(con_handle, report, sizeof(report));
 }
 
 static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
@@ -77,26 +67,11 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
             printf("Just Works requested\n");
             sm_just_works_confirm(sm_event_just_works_request_get_handle(packet));
             break;
-        case SM_EVENT_NUMERIC_COMPARISON_REQUEST:
-            printf("Confirming numeric comparison: %d\n", sm_event_numeric_comparison_request_get_passkey(packet));
-            sm_numeric_comparison_confirm(sm_event_passkey_display_number_get_handle(packet));
-            break;
-        case SM_EVENT_PASSKEY_DISPLAY_NUMBER:
-            printf("Display Passkey: %d\n", sm_event_passkey_display_number_get_passkey(packet));
-            break;
         case HCI_EVENT_HIDS_META:
             switch (hci_event_hids_meta_get_subevent_code(packet)){
                 case HIDS_SUBEVENT_INPUT_REPORT_ENABLE:
                     con_handle = hids_subevent_input_report_enable_get_con_handle(packet);
                     printf("Report Characteristic Subscribed %u\n", hids_subevent_input_report_enable_get_enable(packet));
-                    break;
-                case HIDS_SUBEVENT_BOOT_KEYBOARD_INPUT_REPORT_ENABLE:
-                    con_handle = hids_subevent_boot_keyboard_input_report_enable_get_con_handle(packet);
-                    printf("Boot Keyboard Characteristic Subscribed %u\n", hids_subevent_boot_keyboard_input_report_enable_get_enable(packet));
-                    break;
-                case HIDS_SUBEVENT_PROTOCOL_MODE:
-                    protocol_mode = hids_subevent_protocol_mode_get_protocol_mode(packet);
-                    printf("Protocol Mode: %s mode\n", hids_subevent_protocol_mode_get_protocol_mode(packet) ? "Report" : "Boot");
                     break;
                 case HIDS_SUBEVENT_CAN_SEND_NOW:
                     send_report(send_keycode);
