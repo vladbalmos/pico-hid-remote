@@ -33,7 +33,6 @@ int64_t delay_ctrl_connect(alarm_id_t id, void *user_data) {
     UNUSED(id);
     UNUSED(user_data);
     
-    DEBUG("=======IND ALARM\n");
     ctrl_connect();
     
     return 0;

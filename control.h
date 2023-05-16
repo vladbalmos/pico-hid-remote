@@ -1,7 +1,7 @@
 #include "btstack.h"
 #include "pico/util/queue.h"
 
-#define PAIRING_TIMEOUT_MS 30 * 1000
+#define PAIRING_TIMEOUT_MS 60 * 1000
 #define DELAY_AVRCP_CONNECTION_AFTER_PAIR_MS 1000
 
 typedef enum {

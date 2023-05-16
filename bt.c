@@ -14,7 +14,9 @@ static bd_addr_t remote_addr;
 static bd_addr_t local_addr;
 
 static uint8_t  sdp_avrcp_controller_service_buffer[200];
+static uint8_t device_id_sdp_service_buffer[100];
 
+static uint8_t playing_state = 1;
 
 static void avrcp_packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) {
     UNUSED(size);
@@ -70,15 +72,13 @@ static void avrcp_packet_handler (uint8_t packet_type, uint16_t channel, uint8_t
             return;
         }
 
-        case AVRCP_SUBEVENT_PLAY_STATUS: {
-            printf("AVRCP Controller: Song length %ld ms, Song position %ld ms, Play status %s\n", 
-                avrcp_subevent_play_status_get_song_length(packet), 
-                avrcp_subevent_play_status_get_song_position(packet),
-                avrcp_play_status2str(avrcp_subevent_play_status_get_play_status(packet)));
+        case AVRCP_SUBEVENT_NOTIFICATION_PLAYBACK_STATUS_CHANGED: {
+            DEBUG("AVRCP Controller: Playback status changed %s\n", avrcp_play_status2str(avrcp_subevent_notification_playback_status_changed_get_play_status(packet)));
+            uint8_t play_status = avrcp_subevent_notification_playback_status_changed_get_play_status(packet);
+            DEBUG("PLAY STATUS: %d\n", play_status);
             break;
         }
-                                                 
-                                                 
+
         default:
             break;
         
@@ -181,13 +181,20 @@ void bt_init(queue_t *write_queue, queue_t *read_queue) {
     sdp_init();
     
     memset(sdp_avrcp_controller_service_buffer, 0, sizeof(sdp_avrcp_controller_service_buffer));
-    uint16_t supported_features = AVRCP_FEATURE_MASK_CATEGORY_PLAYER_OR_RECORDER;
-    avrcp_controller_create_sdp_record(sdp_avrcp_controller_service_buffer, 0x10001, supported_features, "AVRCP Controller", "Vlad");
+    uint16_t supported_features = AVRCP_FEATURE_MASK_CATEGORY_MONITOR_OR_AMPLIFIER;
+    avrcp_controller_create_sdp_record(sdp_avrcp_controller_service_buffer, 0x10001, supported_features, "AVRCP Controller", "AVRCP");
     sdp_register_service(sdp_avrcp_controller_service_buffer);
+    
+    // Register Device ID (PnP) service SDP record
+    memset(device_id_sdp_service_buffer, 0, sizeof(device_id_sdp_service_buffer));
+    device_id_create_sdp_record(device_id_sdp_service_buffer, 0x10002, DEVICE_ID_VENDOR_ID_SOURCE_BLUETOOTH, BLUETOOTH_COMPANY_ID_BLUEKITCHEN_GMBH, 1, 1);
+    sdp_register_service(device_id_sdp_service_buffer);
 
     gap_set_local_name("Pico Remote Control 00:00:00:00:00:00");
 
-    uint32_t class_of_device = 0x20050C;
+    // uint32_t class_of_device = 0x20050C;
+    // uint32_t class_of_device = 0x200418;
+    uint32_t class_of_device = 0x200408;
     gap_set_class_of_device(class_of_device);
     
 
@@ -226,7 +233,7 @@ void bt_process_queue() {
 
             case CTRL_EV_REQUEST_CONNECTION: {
                 if (!avrcp_cid) {
-                    DEBUG("-------------CONNECTING-------------------\n")
+                    DEBUG("-------------CONNECTING-------------------\n");
                     uint8_t result = avrcp_connect(remote_addr, &avrcp_cid);
                     if (result != ERROR_CODE_SUCCESS) {
                         uint8_t *status_ptr = malloc(sizeof(uint8_t));
@@ -240,18 +247,22 @@ void bt_process_queue() {
             }
                 
             case CTRL_EV_REQUEST_TOGGLE_PLAY:
-                DEBUG("Requesting toggle play/pause\n");
-                // avrcp_controller_get_play_status(avrcp_cid);
-                DEBUG("%d\n", avrcp_controller_play(avrcp_cid));
+                if (playing_state) {
+                    DEBUG("Requesting toggle play/pause %d\n", avrcp_controller_pause(avrcp_cid));
+                    playing_state = 0;
+                } else {
+                    DEBUG("Requesting toggle play/pause %d\n", avrcp_controller_play(avrcp_cid));
+                    playing_state = 1;
+                }
             break;
 
             case CTRL_EV_REQUEST_VOL_UP:
-                avrcp_controller_volume_up(avrcp_cid);
-                DEBUG("Requesting vol up\n");
+                DEBUG("Requesting vol up %d\n", avrcp_controller_volume_up(avrcp_cid));
             break;
             case CTRL_EV_REQUEST_VOL_DOWN:
-                avrcp_controller_volume_down(avrcp_cid);
-                DEBUG("Requesting vol down\n");
+                // DEBUG("Requesting vol down %d\n", avrcp_controller_volume_down(avrcp_cid));
+                DEBUG("Requesting vol down %d\n", avrcp_controller_mute(avrcp_cid));
+                // DEBUG("Requesting vol down %d\n", avrcp_controller_set_absolute_volume(avrcp_cid, 0));
             break;
         }
     }
