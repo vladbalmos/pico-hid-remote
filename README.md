@@ -1,3 +1,8 @@
+## HID Bluetooth Remote
+
+HID Bluetooth Remote implemented using a Pico W. WIP
+
+## Controls
 fn button:
     - long press - start pairing
     - double press - show baterry level
