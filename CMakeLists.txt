@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 include(pico_sdk_import.cmake)
+include(pico_extras_import_optional.cmake)
 
 project(hidremote VERSION 0.1 LANGUAGES C CXX ASM)
 set(CMAKE_C_STANDARD 11)
@@ -33,6 +34,7 @@ target_link_libraries(hidremote
     pico_btstack_ble
     pico_btstack_cyw43
     pico_cyw43_arch_none
+    hardware_sleep
     )
 
 if(DEFINED ENV{DEBUG_MODE})

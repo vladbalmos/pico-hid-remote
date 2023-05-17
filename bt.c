@@ -61,6 +61,14 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
     switch (hci_event_packet_get_type(packet)) {
         case HCI_EVENT_DISCONNECTION_COMPLETE:
             con_handle = HCI_CON_HANDLE_INVALID;
+            uint8_t reason = hci_event_disconnection_complete_get_reason(packet);                    
+            gap_advertisements_enable(1);
+            // When disconnected, set timer to go to sleep if not connected within 1 minute
+
+            // *reason_ptr = hci_event_disconnection_complete_get_reason(packet);                    
+
+            // ctrl_ev_t ev = ctrl_make_event(CTRL_EV_DISCONNECTED, reason_ptr);
+            // queue_try_add(ctrl_ev_w_queue, &ev);
             printf("Disconnected\n");
             break;
         case SM_EVENT_JUST_WORKS_REQUEST:
@@ -70,6 +78,8 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
         case HCI_EVENT_HIDS_META:
             switch (hci_event_hids_meta_get_subevent_code(packet)){
                 case HIDS_SUBEVENT_INPUT_REPORT_ENABLE:
+                    // Cancel sleep timer
+                    gap_advertisements_enable(0);
                     con_handle = hids_subevent_input_report_enable_get_con_handle(packet);
                     printf("Report Characteristic Subscribed %u\n", hids_subevent_input_report_enable_get_enable(packet));
                     break;
@@ -111,7 +121,7 @@ void bt_init(queue_t *write_queue, queue_t *read_queue) {
 
     // setup advertisements
     uint16_t adv_int_min = 0x0030;
-    uint16_t adv_int_max = 0x0030;
+    uint16_t adv_int_max = 0x0320;
     uint8_t adv_type = 0;
     bd_addr_t null_addr;
     memset(null_addr, 0, 6);
@@ -135,6 +145,21 @@ void bt_init(queue_t *write_queue, queue_t *read_queue) {
 #endif
 
     hci_power_control(HCI_POWER_ON);
+}
+
+void bt_deinit() {
+    sm_remove_event_handler(&sm_event_callback_registration);
+    hci_remove_event_handler(&hci_event_callback_registration);
+    gap_advertisements_enable(0);
+    att_server_deinit();
+    sm_deinit();
+    l2cap_deinit();
+    hci_power_control(HCI_POWER_OFF);
+    
+    ctrl_ev_w_queue = NULL;
+    ctrl_ev_r_queue = NULL;
+    con_handle = HCI_CON_HANDLE_INVALID;
+    send_keycode = 0;
 }
 
 void bt_process_queue() {
