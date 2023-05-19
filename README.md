@@ -1,27 +1,65 @@
 ## HID Bluetooth Remote
 
-HID Bluetooth Remote implemented using a Pico W. WIP
+HID Bluetooth (BLE) Remote based on a Pico W.
 
-## Controls
-fn button:
-    - long press - start pairing
+## Hardware requirements
+
+* Pico W
+* 5 x micro switches
+* TP5100 charging module
+* micro USB female
+* 1 x 18650 lithium battery
+* pico probe (optional)
+
+## Software dependencies
+
+* pico-sdk (1.5.0)
+* pico-extras
+* opencd (optional)
+* pico probe (optional)
+
+
+## Build
+
+    make build
+    
+## Install
+Via pico probe:
+
+    make install
+
+## Buttons
+
+fn:
+    - long press - turn off
     - double press - show baterry level
     
-toggle play btn
+play
     - wakeup from sleep if sleeping
-    - long press - connect to prev host if paired
+    - toggle play/pause
     
-on startup:
-    - not discoverable
-    - not connectable
-    - create timer to check for pair, disable everything in 30 sec
+vol up
+    - increase volume
+
+vol down
+    - decrease volume
+
+reset btn
+    - reset PICO
     
-on paired:
-    - not discoverable
-    - connectable
-    - avrcp_connect()
+## Behaviour
     
-on lost connection:
-    - if previously paired:
-        - retry connection for 60 sec, then goto sleep if failed
+On startup the device is discoverable for one minute, after which, if not paired the device will go to sleep to preserve battery.
+
+If the device is paired, discoverability is turned off until disconnected.
+
+Once paired, the device will go to sleep if no button was pressed in 10 minutes to preserve battery.
+
+### LEDs:
+
+* blue
+    - flashes while not connected and in pairing mode
+    - stable for 5 seconds after pairing
     
+* 3 x red
+    - show battery level

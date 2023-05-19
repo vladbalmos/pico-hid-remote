@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "buttons.h"
+#include "debug.h"
 
 
 static uint8_t btn_state[] = {BTN_RELEASE, BTN_RELEASE, BTN_RELEASE, BTN_RELEASE};
@@ -46,26 +47,14 @@ void btn_create_array(button_t *btns, uint8_t btn_count) {
 }
 
 void btn_handled(button_t *btn, absolute_time_t now) {
-    if (now == nil_time) {
-        now = get_absolute_time();
-    }
-    btn->pressed_at = nil_time;
     btn->released_at = now;
 }
 
 uint8_t btn_is_pressed(button_t *btn) {
-    return (btn->pressed_at != nil_time && btn->released_at == nil_time);
-}
-
-uint8_t btn_is_released(button_t *btn) {
-    return btn->released_at != nil_time;
+    return btn->pressed_at > btn->released_at;
 }
 
 uint8_t btn_is_long_press(button_t *btn) {
-    if (btn->released_at) {
-        return 0;
-    }
-    
     absolute_time_t now = get_absolute_time();
     uint32_t diff = absolute_time_diff_us(btn->pressed_at, now) / 1000;
     
@@ -77,13 +66,14 @@ uint8_t btn_is_long_press(button_t *btn) {
     return 0;
 }
 
-uint8_t btn_is_double_press(button_t *btn, absolute_time_t *last_release) {
-    if (*last_release == nil_time) {
-        return 0;
-    }
+uint8_t btn_is_double_press(button_t *btn) {
     absolute_time_t now = get_absolute_time();
+    uint32_t diff = absolute_time_diff_us(btn->released_at, btn->pressed_at) / 1000;
+
+    if (diff <= DOUBLE_PRESS_TIME_MS) {
+        btn_handled(btn, now);
+        return 1;
+    }
     
-    uint32_t diff = absolute_time_diff_us(*last_release, now) / 1000;
-    *last_release = nil_time;
-    return (diff <= DOUBLE_PRESS_TIME_MS);
+    return 0;
 }

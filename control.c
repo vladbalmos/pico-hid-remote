@@ -5,28 +5,16 @@
 #include "control.h"
 #include "debug.h"
 
+uint8_t ctrl_is_connected = 1;
+
+absolute_time_t ctrl_connected_at;
+absolute_time_t ctrl_disconnected_at;
+absolute_time_t last_command_at;
+
 static queue_t *ctrl_ev_w_queue = NULL;
 static queue_t *ctrl_ev_r_queue = NULL;
+static uint8_t ctrl_is_discoverable = 1;
 
-static uint8_t is_paired = 1;
-static uint8_t is_discoverable = 0;
-
-static uint8_t is_connected = 1;
-static uint8_t connecting = 0;
-
-static alarm_id_t check_pairing_status_alarm;
-
-int64_t check_pairing_status(alarm_id_t id, void *user_data) {
-    UNUSED(id);
-    UNUSED(user_data);
-    
-    
-    if (!is_paired) {
-        ctrl_make_discoverable(0);
-    }
-    
-    return 0;
-}
 
 ctrl_ev_t ctrl_make_event(ctrl_ev_type_t ev_type, void *data) {
     ctrl_ev_t ev;
@@ -39,6 +27,18 @@ ctrl_ev_t ctrl_make_event(ctrl_ev_type_t ev_type, void *data) {
 void ctrl_init(queue_t *write_queue, queue_t *read_queue) {
     ctrl_ev_w_queue = write_queue;
     ctrl_ev_r_queue = read_queue;
+    ctrl_disconnected_at = get_absolute_time();
+    last_command_at = ctrl_disconnected_at;
+}
+
+void ctrl_deinit() {
+    ctrl_ev_w_queue = NULL;
+    ctrl_ev_r_queue = NULL;
+    ctrl_is_discoverable = 1;
+    ctrl_is_connected = 0;
+    ctrl_connected_at = nil_time;
+    ctrl_disconnected_at = nil_time;
+    last_command_at = nil_time;
 }
 
 void ctrl_process_queue() {
@@ -47,57 +47,35 @@ void ctrl_process_queue() {
     while (queue_try_remove(ctrl_ev_r_queue, &ev)) {
         switch (ev.type) {
 
-            case CTRL_EV_PAIRING_SUCCESS: {
-                DEBUG("Is paired with %s\n", bd_addr_to_str(ev.data));
-                free(ev.data);
-                ev.data = NULL;
-                is_discoverable = 0;
-                is_paired = 1;
-                cancel_alarm(check_pairing_status_alarm);
-                break;
-            }
-
             case CTRL_EV_CONNECTED: {
-                if (!is_paired) {
-                    break;
+                if (ctrl_is_connected) {
+                    continue;
                 }
 
-                ctrl_connect();
-                is_connected = 1;
+                ctrl_is_connected = 1;
+                ctrl_connected_at = get_absolute_time();
+                ctrl_disconnected_at = nil_time;
+                ctrl_make_discoverable(0);
                 break;
             }
                                           
             case CTRL_EV_DISCONNECTED: {
-                uint8_t reason = *(uint8_t *) ev.data;
-                free(ev.data);
-                DEBUG("Connection lost. Reason: %d\n", reason);
-                is_connected = 0;
-
-                if (reason != ERROR_CODE_REMOTE_USER_TERMINATED_CONNECTION && reason != ERROR_CODE_PAIRING_NOT_ALLOWED) {
-                    // RETRY CONNECTION
+                if (!ctrl_is_connected) {
+                    continue;
                 }
+                ctrl_is_connected = 0;
+                ctrl_disconnected_at = get_absolute_time();
+                ctrl_connected_at = nil_time;
+                ctrl_make_discoverable(1);
                 break;
             }
+
         }
     };
 }
 
-void ctrl_connect() {
-    if (is_connected) {
-        return;
-    }
-
-    ctrl_ev_t ev = ctrl_make_event(CTRL_EV_REQUEST_CONNECTION, NULL);
-    if (!queue_try_add(ctrl_ev_w_queue, &ev)) {
-        return;
-    }
-    
-    connecting = 1;
-}
-
-
 void ctrl_make_discoverable(uint8_t state) {
-    if (state && is_discoverable) {
+    if (state == ctrl_is_discoverable) {
         return;
     }
     uint8_t *state_ptr = malloc(sizeof(uint8_t));
@@ -108,14 +86,15 @@ void ctrl_make_discoverable(uint8_t state) {
         return;
     }
     
-    is_discoverable = state;
-    if (state) {
-        check_pairing_status_alarm = add_alarm_in_ms(PAIRING_TIMEOUT_MS, check_pairing_status, NULL, false);
-    }
+    ctrl_is_discoverable = state;
 }
 
 void ctrl_toggle_play_pause() {
+    if (!ctrl_is_connected) {
+        return;
+    }
     ctrl_ev_t ev = ctrl_make_event(CTRL_EV_REQUEST_TOGGLE_PLAY, NULL);
+    last_command_at = get_absolute_time();
     
     if (!queue_try_add(ctrl_ev_w_queue, &ev)) {
         return;
@@ -123,7 +102,11 @@ void ctrl_toggle_play_pause() {
 }
 
 void ctrl_vol_up() {
+    if (!ctrl_is_connected) {
+        return;
+    }
     ctrl_ev_t ev = ctrl_make_event(CTRL_EV_REQUEST_VOL_UP, NULL);
+    last_command_at = get_absolute_time();
 
     if (!queue_try_add(ctrl_ev_w_queue, &ev)) {
         return;
@@ -131,7 +114,11 @@ void ctrl_vol_up() {
 }
 
 void ctrl_vol_down() {
+    if (!ctrl_is_connected) {
+        return;
+    }
     ctrl_ev_t ev = ctrl_make_event(CTRL_EV_REQUEST_VOL_DOWN, NULL);
+    last_command_at = get_absolute_time();
 
     if (!queue_try_add(ctrl_ev_w_queue, &ev)) {
         return;

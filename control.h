@@ -1,7 +1,7 @@
-#include "btstack.h"
 #include "pico/util/queue.h"
 
-#define PAIRING_TIMEOUT_MS 60 * 1000
+#define CTRL_CMD_TIMEOUT_MS 60 * 10 * 1000
+#define CTRL_DEEP_SLEEP_TIMEOUT_MS 60 * 1000
 
 typedef enum {
     CTRL_EV_MAKE_DISCOVERABLE,
@@ -23,6 +23,7 @@ typedef struct {
 ctrl_ev_t ctrl_make_event(ctrl_ev_type_t ev_type, void *data);
 
 void ctrl_init(queue_t *write_queue, queue_t *read_queue);
+void ctrl_deinit();
 void ctrl_process_queue();
 void ctrl_make_discoverable(uint8_t state);
 void ctrl_connect();

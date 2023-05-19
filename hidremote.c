@@ -23,6 +23,10 @@ static button_t btns[4];
 static queue_t ctrl_ev_w_queue;
 static queue_t ctrl_ev_r_queue;
 
+extern uint8_t ctrl_is_connected;
+extern absolute_time_t ctrl_disconnected_at;
+extern absolute_time_t last_command_at;
+
 static button_t *get_btn(uint8_t pin) {
     button_t *btn;
 
@@ -51,56 +55,52 @@ static void gpio_irq_handler(uint gpio, uint32_t event) {
     
     if (btn_action == BTN_PRESS) {
         btn->pressed_at = get_absolute_time();
-        btn->released_at = nil_time;
     } else {
         btn->released_at = get_absolute_time();
     }
-
-    // DEBUG("Btn %d. Presed at %llu. Released at %llu\n", btn->pin, btn->pressed_at, btn->released_at);
 }
 
+static int8_t deep_sleep() {
+    // flush stdio
+    uart_default_tx_wait_blocking();
+    
+    // prepare for sleep
+    bt_deinit();
+    cyw43_arch_deinit();
+    ctrl_deinit();
+    
+    // sleep until GPIO input
+    sleep_run_from_rosc();
+    sleep_goto_dormant_until_edge_high(PLAY_CTRL_BTN_PIN);
+    
+    // At this point we've woken up
 
-void measure_freqs(void) {
-    uint f_pll_sys = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_SYS_CLKSRC_PRIMARY);
-    uint f_pll_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_USB_CLKSRC_PRIMARY);
-    uint f_rosc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_ROSC_CLKSRC);
-    uint f_clk_sys = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_SYS);
-    uint f_clk_peri = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_PERI);
-    uint f_clk_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_USB);
-    uint f_clk_adc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_ADC);
-    uint f_clk_rtc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_RTC);
+    // Reset the clocks
+    clocks_init();
+    
+    // Re-init stdio
+    stdio_init_all();
+    DEBUG("Woken up\n");
+    uart_default_tx_wait_blocking();
 
-    printf("------------------- FREQ-------------\n");
-    printf("\tll_sys  = %dkHz\n", f_pll_sys);
-    printf("\tpll_usb  = %dkHz\n", f_pll_usb);
-    printf("\trosc     = %dkHz\n", f_rosc);
-    printf("\tclk_sys  = %dkHz\n", f_clk_sys);
-    printf("\tclk_peri = %dkHz\n", f_clk_peri);
-    printf("\tclk_usb  = %dkHz\n", f_clk_usb);
-    printf("\tclk_adc  = %dkHz\n", f_clk_adc);
-    printf("\tclk_rtc  = %dkHz\n", f_clk_rtc);
-    printf("------------------- END FREQ---------\n");
+    // Initialize BT
+    if (cyw43_arch_init()) {
+        DEBUG("Failed to initialise cyw43_arch\n");
+        return -1;
+    }
+    bt_init(&ctrl_ev_r_queue, &ctrl_ev_w_queue);
+    ctrl_init(&ctrl_ev_w_queue, &ctrl_ev_r_queue);
+    return 0;
 }
+
 
 int main() {
     stdio_init_all();
-    // Get the current system clock frequency
-    // uint current_sys_clk = clock_get_hz(clk_sys);
-    // DEBUG("%d\n", current_sys_clk);
-
-    // Set the system clock to a lower frequency, e.g., half of its current speed
-
-    uint scb_orig = scb_hw->scr;
-    uint clock0_orig = clocks_hw->sleep_en0;
-    uint clock1_orig = clocks_hw->sleep_en1;
-
 
     if (cyw43_arch_init()) {
         printf("failed to initialise cyw43_arch\n");
         return -1;
     }
-    
-    btn_create_array(btns, 4);
     
     // init gpio pins
     for (uint8_t i = 0; i < 4; i++) {
@@ -114,77 +114,80 @@ int main() {
     
     // init btstack
     bt_init(&ctrl_ev_r_queue, &ctrl_ev_w_queue);
+
+    // init controller
     ctrl_init(&ctrl_ev_w_queue, &ctrl_ev_r_queue);
     
+    // init buttons
+    btn_create_array(btns, 4);
+
     button_t *btn;
-    absolute_time_t fn_btn_last_release = nil_time;
-    
+
+    absolute_time_t now = nil_time;
+    uint32_t diff = 0;
+
+    DEBUG("Remote initialized\n");
     while (1) {
-        // measure_freqs();
         bt_process_queue();
         ctrl_process_queue();
+        now = get_absolute_time();
+
+        if (!ctrl_is_connected) {
+            diff = absolute_time_diff_us(ctrl_disconnected_at, now) / 1000;
+            if (diff >= CTRL_DEEP_SLEEP_TIMEOUT_MS) {
+                DEBUG("Going to sleep\n");
+                deep_sleep();
+                continue;
+            }
+        } else if (last_command_at) {
+            diff = absolute_time_diff_us(last_command_at, now) / 1000;
+            if (diff >= CTRL_CMD_TIMEOUT_MS) {
+                DEBUG("Going to sleep\n");
+                deep_sleep();
+                continue;
+            }
+        }
+        
         btn = get_btn(FN_BTN_PIN);
 
         if (btn_is_pressed(btn)) {
             if (btn_is_long_press(btn))  {
-                ctrl_make_discoverable(1);
-            } else if (btn_is_double_press(btn, &fn_btn_last_release)) {
-                ctrl_connect();
+                DEBUG("Going to sleep\n");
+                if (deep_sleep() == -1) {
+                    // Unable to re-initialize hardware
+                    panic("Unable to wake up from sleep!");
+                    return -1;
+                }
+
+                DEBUG("Showing BT LED activity\n");
+                goto SLEEP;
+            } else if (btn_is_double_press(btn)) {
+                DEBUG("Showing battery level\n");
             }
             goto SLEEP;
         }
-        
-        if (btn_is_released(btn) && fn_btn_last_release == nil_time) {
-            fn_btn_last_release = get_absolute_time();
-        }
-        
+
         btn = get_btn(PLAY_CTRL_BTN_PIN);
         if (btn_is_pressed(btn)) {
-            // TODO: goto sleep if not paired in one minute
-            bt_deinit();
-            cyw43_arch_deinit();
-            DEBUG("DEBUG_SLEEPING");
-            uart_default_tx_wait_blocking();
-            sleep_run_from_rosc();
-            sleep_goto_dormant_until_edge_high(VOL_DOWN_BTN_PIN);
-            
-
-            clocks_init();
-            stdio_init_all();
-            DEBUG("wokeup\n");
-            uart_default_tx_wait_blocking();
-            if (cyw43_arch_init()) {
-                printf("failed to initialise cyw43_arch\n");
-                return -1;
-            }
-            bt_init(&ctrl_ev_r_queue, &ctrl_ev_w_queue);
-            // if (cyw43_arch_init()) {
-            //     printf("failed to initialise cyw43_arch\n");
-            //     return -1;
-            // }
-
-            // bt_init(&ctrl_ev_r_queue, &ctrl_ev_w_queue);
-
-            // ctrl_toggle_play_pause();
-            btn_handled(btn, nil_time);
+            btn_handled(btn, get_absolute_time());
+            ctrl_toggle_play_pause();
             goto SLEEP;
         }
 
         btn = get_btn(VOL_UP_BTN_PIN);
         if (btn_is_pressed(btn)) {
+            btn_handled(btn, get_absolute_time());
             ctrl_vol_up();
-            btn_handled(btn, nil_time);
             goto SLEEP;
         }
 
         btn = get_btn(VOL_DOWN_BTN_PIN);
         if (btn_is_pressed(btn)) {
+            btn_handled(btn, get_absolute_time());
             ctrl_vol_down();
-            btn_handled(btn, nil_time);
             goto SLEEP;
         }
-        
-        
+
         SLEEP:
             sleep_ms(10);
     }

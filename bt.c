@@ -56,32 +56,30 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
     UNUSED(channel);
     UNUSED(size);
 
-    if (packet_type != HCI_EVENT_PACKET) return;
+    if (packet_type != HCI_EVENT_PACKET) {
+        DEBUG("Unknown event\n");
+        return;
+    }
 
     switch (hci_event_packet_get_type(packet)) {
         case HCI_EVENT_DISCONNECTION_COMPLETE:
             con_handle = HCI_CON_HANDLE_INVALID;
-            uint8_t reason = hci_event_disconnection_complete_get_reason(packet);                    
-            gap_advertisements_enable(1);
-            // When disconnected, set timer to go to sleep if not connected within 1 minute
-
-            // *reason_ptr = hci_event_disconnection_complete_get_reason(packet);                    
-
-            // ctrl_ev_t ev = ctrl_make_event(CTRL_EV_DISCONNECTED, reason_ptr);
-            // queue_try_add(ctrl_ev_w_queue, &ev);
-            printf("Disconnected\n");
+            ctrl_ev_t ev = ctrl_make_event(CTRL_EV_DISCONNECTED, NULL);
+            queue_try_add(ctrl_ev_w_queue, &ev);
+            DEBUG("BT Disconnected\n");
             break;
         case SM_EVENT_JUST_WORKS_REQUEST:
-            printf("Just Works requested\n");
+            DEBUG("BT Authenticated\n");
             sm_just_works_confirm(sm_event_just_works_request_get_handle(packet));
             break;
+
         case HCI_EVENT_HIDS_META:
             switch (hci_event_hids_meta_get_subevent_code(packet)){
                 case HIDS_SUBEVENT_INPUT_REPORT_ENABLE:
-                    // Cancel sleep timer
-                    gap_advertisements_enable(0);
                     con_handle = hids_subevent_input_report_enable_get_con_handle(packet);
-                    printf("Report Characteristic Subscribed %u\n", hids_subevent_input_report_enable_get_enable(packet));
+                    DEBUG("BT HID Connected\n");
+                    ctrl_ev_t ev = ctrl_make_event(CTRL_EV_CONNECTED, NULL);
+                    queue_try_add(ctrl_ev_w_queue, &ev);
                     break;
                 case HIDS_SUBEVENT_CAN_SEND_NOW:
                     send_report(send_keycode);
@@ -90,7 +88,7 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
                     break;
             }
             break;
-            
+
         default:
             break;
     }
@@ -102,7 +100,6 @@ void bt_init(queue_t *write_queue, queue_t *read_queue) {
 
     l2cap_init();
 
-    // setup SM: Display only
     sm_init();
     sm_set_io_capabilities(IO_CAPABILITY_NO_INPUT_NO_OUTPUT);
     sm_set_authentication_requirements(SM_AUTHREQ_SECURE_CONNECTION | SM_AUTHREQ_BONDING);
@@ -170,6 +167,7 @@ void bt_process_queue() {
             case CTRL_EV_MAKE_DISCOVERABLE: {
                 uint8_t state = *(uint8_t *) ev.data;
                 free(ev.data);
+                gap_advertisements_enable(state);
                 DEBUG("Making discoverable %d\n", state);
                 break;
             }
@@ -189,6 +187,7 @@ void bt_process_queue() {
                 send_keycode = 0;
                 hids_device_request_can_send_now_event(con_handle);
             break;
+
             case CTRL_EV_REQUEST_VOL_DOWN:
                 DEBUG("Requesting vol down\n");
                 send_keycode = KEY_VOL_DOWN;
