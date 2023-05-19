@@ -116,14 +116,14 @@ int main() {
         if (!ctrl_is_connected) {
             time_diff = absolute_time_diff_us(ctrl_disconnected_at, now) / 1000;
             if (time_diff >= CTRL_DEEP_SLEEP_TIMEOUT_MS) {
-                DEBUG("Going to sleep\n");
+                DEBUG("Going to sleep due to lack of remote connection\n");
                 deep_sleep();
                 continue;
             }
         } else if (last_command_at) {
             time_diff = absolute_time_diff_us(last_command_at, now) / 1000;
             if (time_diff >= CTRL_CMD_TIMEOUT_MS) {
-                DEBUG("Going to sleep\n");
+                DEBUG("Going to sleep due to inactivity\n");
                 deep_sleep();
                 continue;
             }
@@ -133,6 +133,7 @@ int main() {
 
         if (btn_is_pressed(btn)) {
             if (btn_is_long_press(btn))  {
+                btn_handled(btn, now);
                 DEBUG("Going to sleep\n");
                 if (deep_sleep() == -1) {
                     // Unable to re-initialize hardware
@@ -150,21 +151,21 @@ int main() {
 
         btn = btn_get(PLAY_CTRL_BTN_PIN);
         if (btn_is_pressed(btn)) {
-            btn_handled(btn, get_absolute_time());
+            btn_handled(btn, now);
             ctrl_toggle_play_pause();
             goto SLEEP;
         }
 
         btn = btn_get(VOL_UP_BTN_PIN);
         if (btn_is_pressed(btn)) {
-            btn_handled(btn, get_absolute_time());
+            btn_handled(btn, now);
             ctrl_vol_up();
             goto SLEEP;
         }
 
         btn = btn_get(VOL_DOWN_BTN_PIN);
         if (btn_is_pressed(btn)) {
-            btn_handled(btn, get_absolute_time());
+            btn_handled(btn, now);
             ctrl_vol_down();
             goto SLEEP;
         }

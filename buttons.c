@@ -66,7 +66,6 @@ uint8_t btn_is_long_press(button_t *btn) {
     uint32_t diff = absolute_time_diff_us(btn->pressed_at, now) / 1000;
     
     if (diff >= LONG_PRESS_TIME_MS) {
-        btn_handled(btn, now);
         return 1;
     }
     
