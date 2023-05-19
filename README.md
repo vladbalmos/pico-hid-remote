@@ -31,20 +31,25 @@ Via pico probe:
 ## Buttons
 
 fn:
+
     - long press - turn off
     - double press - show baterry level
     
 play
+
     - wakeup from sleep if sleeping
     - toggle play/pause
     
 vol up
+
     - increase volume
 
 vol down
+
     - decrease volume
 
 reset btn
+
     - reset PICO
     
 ## Behaviour
