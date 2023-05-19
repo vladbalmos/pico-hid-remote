@@ -20,9 +20,10 @@ typedef struct {
     absolute_time_t released_at;
 } button_t;
 
-uint8_t btn_get_index(uint8_t pin);
+
+button_t *btn_get(uint8_t pin);
 void btn_debounce(uint8_t pin, uint32_t event_mask, int8_t *confirm_pin, uint8_t *btn_action);
-void btn_create_array(button_t *btns, uint8_t count);
+void btn_create_array();
 
 uint8_t btn_is_pressed(button_t *btn);
 uint8_t btn_is_long_press(button_t *btn);

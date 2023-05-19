@@ -1,9 +1,6 @@
 #include <stdlib.h>
-#include "btstack.h"
-#include "pico/stdlib.h"
 #include "pico/util/queue.h"
 #include "control.h"
-#include "debug.h"
 
 uint8_t ctrl_is_connected = 1;
 
@@ -47,7 +44,7 @@ void ctrl_process_queue() {
     while (queue_try_remove(ctrl_ev_r_queue, &ev)) {
         switch (ev.type) {
 
-            case CTRL_EV_CONNECTED: {
+            case CTRL_EV_CONNECTED:
                 if (ctrl_is_connected) {
                     continue;
                 }
@@ -56,10 +53,9 @@ void ctrl_process_queue() {
                 ctrl_connected_at = get_absolute_time();
                 ctrl_disconnected_at = nil_time;
                 ctrl_make_discoverable(0);
-                break;
-            }
+            break;
                                           
-            case CTRL_EV_DISCONNECTED: {
+            case CTRL_EV_DISCONNECTED:
                 if (!ctrl_is_connected) {
                     continue;
                 }
@@ -67,8 +63,10 @@ void ctrl_process_queue() {
                 ctrl_disconnected_at = get_absolute_time();
                 ctrl_connected_at = nil_time;
                 ctrl_make_discoverable(1);
+            break;
+            
+            default:
                 break;
-            }
 
         }
     };

@@ -1,33 +1,20 @@
 #include <stdio.h>
 #include "pico/cyw43_arch.h"
-#include "pico/stdlib.h"
 #include "pico/sleep.h"
 #include "hardware/clocks.h"
-#include "hardware/rosc.h"
-#include "hardware/structs/scb.h"
-#include "hardware/pll.h"
 #include "pico/util/queue.h"
-#include "debug.h"
 #include "bt.h"
 #include "buttons.h"
 #include "control.h"
+#include "debug.h"
 
 static uint8_t pins[] = {FN_BTN_PIN, PLAY_CTRL_BTN_PIN, VOL_UP_BTN_PIN, VOL_DOWN_BTN_PIN};
-static button_t btns[4];
 static queue_t ctrl_ev_w_queue;
 static queue_t ctrl_ev_r_queue;
 
 extern uint8_t ctrl_is_connected;
 extern absolute_time_t ctrl_disconnected_at;
 extern absolute_time_t last_command_at;
-
-static button_t *get_btn(uint8_t pin) {
-    button_t *btn;
-
-    uint8_t btn_index = btn_get_index(pin);
-    btn = &btns[btn_index];
-    return btn;
-}
 
 static void gpio_irq_handler(uint gpio, uint32_t event) {
     if (event == (GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL)) {
@@ -44,7 +31,7 @@ static void gpio_irq_handler(uint gpio, uint32_t event) {
         return;
     }
 
-    btn = get_btn(btn_pin);
+    btn = btn_get(btn_pin);
     btn->pin = btn_pin;
     
     if (btn_action == BTN_PRESS) {
@@ -113,7 +100,7 @@ int main() {
     ctrl_init(&ctrl_ev_w_queue, &ctrl_ev_r_queue);
     
     // init buttons
-    btn_create_array(btns, 4);
+    btn_create_array();
 
     button_t *btn;
 
@@ -142,7 +129,7 @@ int main() {
             }
         }
         
-        btn = get_btn(FN_BTN_PIN);
+        btn = btn_get(FN_BTN_PIN);
 
         if (btn_is_pressed(btn)) {
             if (btn_is_long_press(btn))  {
@@ -161,21 +148,21 @@ int main() {
             goto SLEEP;
         }
 
-        btn = get_btn(PLAY_CTRL_BTN_PIN);
+        btn = btn_get(PLAY_CTRL_BTN_PIN);
         if (btn_is_pressed(btn)) {
             btn_handled(btn, get_absolute_time());
             ctrl_toggle_play_pause();
             goto SLEEP;
         }
 
-        btn = get_btn(VOL_UP_BTN_PIN);
+        btn = btn_get(VOL_UP_BTN_PIN);
         if (btn_is_pressed(btn)) {
             btn_handled(btn, get_absolute_time());
             ctrl_vol_up();
             goto SLEEP;
         }
 
-        btn = get_btn(VOL_DOWN_BTN_PIN);
+        btn = btn_get(VOL_DOWN_BTN_PIN);
         if (btn_is_pressed(btn)) {
             btn_handled(btn, get_absolute_time());
             ctrl_vol_down();

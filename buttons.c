@@ -1,15 +1,22 @@
-#include <stdio.h>
-#include "pico/stdlib.h"
+#include <stdlib.h>
 #include "buttons.h"
-#include "debug.h"
 
-
+static button_t btns[4];
 static uint8_t btn_state[] = {BTN_RELEASE, BTN_RELEASE, BTN_RELEASE, BTN_RELEASE};
 static absolute_time_t debounce_due[] = {0, 0, 0, 0};
 
-uint8_t btn_get_index(uint8_t pin) {
+static uint8_t btn_get_index(uint8_t pin) {
     return pin - BTN_MIN_PIN;
 }
+
+button_t *btn_get(uint8_t pin) {
+    button_t *btn;
+
+    uint8_t btn_index = btn_get_index(pin);
+    btn = &btns[btn_index];
+    return btn;
+}
+
 
 void btn_debounce(uint8_t pin, uint32_t event_mask, int8_t *confirm_pin, uint8_t *btn_action) {
     absolute_time_t _debounce_due;
@@ -35,8 +42,8 @@ void btn_debounce(uint8_t pin, uint32_t event_mask, int8_t *confirm_pin, uint8_t
     *btn_action = new_state;
 }
 
-void btn_create_array(button_t *btns, uint8_t btn_count) {
-    for (uint8_t i = 0; i < btn_count; i++) {
+void btn_create_array() {
+    for (uint8_t i = 0; i < 4; i++) {
         button_t btn;
         btn.pin = -1;
         btn.pressed_at = nil_time;

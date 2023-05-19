@@ -1,6 +1,6 @@
-#include "pico/util/queue.h"
-#include "hidremote.h"
 #include "btstack.h"
+#include "hidremote.h"
+#include "pico/util/queue.h"
 #include "control.h"
 #include "debug.h"
 
@@ -195,6 +195,9 @@ void bt_process_queue() {
                 send_keycode = 0;
                 hids_device_request_can_send_now_event(con_handle);
             break;
+            
+            default:
+                break;
         }
     }
 }
