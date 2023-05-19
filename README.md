@@ -10,6 +10,8 @@ HID Bluetooth (BLE) Remote based on a Pico W.
 * micro USB female
 * 1 x 18650 lithium battery
 * pico probe (optional)
+* 1 x 3mm blue LED
+* 3 x 3mm red LED
 
 ## Software dependencies
 
@@ -30,26 +32,21 @@ Via pico probe:
 
 ## Buttons
 
-fn:
-
+* FN
     - long press - turn off
     - double press - show baterry level
     
-play
-
+* PLAY
     - wakeup from sleep if sleeping
     - toggle play/pause
     
-vol up
-
+* VOL UP
     - increase volume
 
-vol down
-
+* VOL DOWN
     - decrease volume
 
-reset btn
-
+* RESET
     - reset PICO
     
 ## Behaviour
@@ -60,7 +57,7 @@ If the device is paired, discoverability is turned off until disconnected.
 
 Once paired, the device will go to sleep if no button was pressed in 10 minutes to preserve battery.
 
-### LEDs:
+### LEDs
 
 * blue
     - flashes while not connected and in pairing mode
