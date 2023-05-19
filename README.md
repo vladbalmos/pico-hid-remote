@@ -51,11 +51,11 @@ Via pico probe:
     
 ## Behaviour
     
-On startup the device is discoverable for one minute, after which, if not paired the device will go to sleep to preserve battery.
+On startup the device is discoverable for one minute, after which, if not paired, the device will go to sleep to preserve battery.
 
 If the device is paired, discoverability is turned off until disconnected.
 
-Once paired, the device will go to sleep if no button was pressed in 10 minutes to preserve battery.
+Once paired, the device will go to sleep if no button press was detected in 10 minutes in order to preserve battery.
 
 ### LEDs
 
@@ -65,3 +65,4 @@ Once paired, the device will go to sleep if no button was pressed in 10 minutes 
     
 * 3 x red
     - show battery level
+    - if battery level < 5% the last led in will flash for 5 seconds

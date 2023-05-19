@@ -98,6 +98,7 @@ int main() {
     // Init Bluetooth chipset
     if (cyw43_arch_init()) {
         printf("failed to initialise cyw43_arch\n");
+        // TODO: check if power goes down when returning early
         return -1;
     }
     
