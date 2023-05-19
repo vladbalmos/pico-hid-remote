@@ -1,5 +1,5 @@
 #include "btstack.h"
-#include "hidremote.h"
+#include "hidremote_gatt.h"
 #include "pico/util/queue.h"
 #include "control.h"
 #include "debug.h"
