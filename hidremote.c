@@ -105,7 +105,7 @@ int main() {
     button_t *btn;
 
     absolute_time_t now = nil_time;
-    uint32_t diff = 0;
+    uint32_t time_diff = 0;
 
     DEBUG("Remote initialized\n");
     while (1) {
@@ -114,15 +114,15 @@ int main() {
         now = get_absolute_time();
 
         if (!ctrl_is_connected) {
-            diff = absolute_time_diff_us(ctrl_disconnected_at, now) / 1000;
-            if (diff >= CTRL_DEEP_SLEEP_TIMEOUT_MS) {
+            time_diff = absolute_time_diff_us(ctrl_disconnected_at, now) / 1000;
+            if (time_diff >= CTRL_DEEP_SLEEP_TIMEOUT_MS) {
                 DEBUG("Going to sleep\n");
                 deep_sleep();
                 continue;
             }
         } else if (last_command_at) {
-            diff = absolute_time_diff_us(last_command_at, now) / 1000;
-            if (diff >= CTRL_CMD_TIMEOUT_MS) {
+            time_diff = absolute_time_diff_us(last_command_at, now) / 1000;
+            if (time_diff >= CTRL_CMD_TIMEOUT_MS) {
                 DEBUG("Going to sleep\n");
                 deep_sleep();
                 continue;
