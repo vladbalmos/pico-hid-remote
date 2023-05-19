@@ -6,7 +6,7 @@ uint8_t ctrl_is_connected = 1;
 
 absolute_time_t ctrl_connected_at;
 absolute_time_t ctrl_disconnected_at;
-absolute_time_t last_command_at;
+absolute_time_t ctrl_last_command_at;
 
 static queue_t *ctrl_ev_w_queue = NULL;
 static queue_t *ctrl_ev_r_queue = NULL;
@@ -25,7 +25,7 @@ void ctrl_init(queue_t *write_queue, queue_t *read_queue) {
     ctrl_ev_w_queue = write_queue;
     ctrl_ev_r_queue = read_queue;
     ctrl_disconnected_at = get_absolute_time();
-    last_command_at = ctrl_disconnected_at;
+    ctrl_last_command_at = ctrl_disconnected_at;
 }
 
 void ctrl_deinit() {
@@ -35,7 +35,7 @@ void ctrl_deinit() {
     ctrl_is_connected = 0;
     ctrl_connected_at = nil_time;
     ctrl_disconnected_at = nil_time;
-    last_command_at = nil_time;
+    ctrl_last_command_at = nil_time;
 }
 
 void ctrl_process_queue() {
@@ -92,11 +92,9 @@ void ctrl_toggle_play_pause() {
         return;
     }
     ctrl_ev_t ev = ctrl_make_event(CTRL_EV_REQUEST_TOGGLE_PLAY, NULL);
-    last_command_at = get_absolute_time();
+    ctrl_last_command_at = get_absolute_time();
     
-    if (!queue_try_add(ctrl_ev_w_queue, &ev)) {
-        return;
-    }
+    queue_try_add(ctrl_ev_w_queue, &ev);
 }
 
 void ctrl_vol_up() {
@@ -104,11 +102,9 @@ void ctrl_vol_up() {
         return;
     }
     ctrl_ev_t ev = ctrl_make_event(CTRL_EV_REQUEST_VOL_UP, NULL);
-    last_command_at = get_absolute_time();
+    ctrl_last_command_at = get_absolute_time();
 
-    if (!queue_try_add(ctrl_ev_w_queue, &ev)) {
-        return;
-    }
+    queue_try_add(ctrl_ev_w_queue, &ev);
 }
 
 void ctrl_vol_down() {
@@ -116,9 +112,7 @@ void ctrl_vol_down() {
         return;
     }
     ctrl_ev_t ev = ctrl_make_event(CTRL_EV_REQUEST_VOL_DOWN, NULL);
-    last_command_at = get_absolute_time();
+    ctrl_last_command_at = get_absolute_time();
 
-    if (!queue_try_add(ctrl_ev_w_queue, &ev)) {
-        return;
-    }
+    queue_try_add(ctrl_ev_w_queue, &ev);
 }

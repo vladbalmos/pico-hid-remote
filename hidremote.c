@@ -8,13 +8,15 @@
 #include "control.h"
 #include "debug.h"
 
+#define MICRO_SLEEP_MS 10
+
 static uint8_t pins[] = {FN_BTN_PIN, PLAY_CTRL_BTN_PIN, VOL_UP_BTN_PIN, VOL_DOWN_BTN_PIN};
 static queue_t ctrl_ev_w_queue;
 static queue_t ctrl_ev_r_queue;
 
 extern uint8_t ctrl_is_connected;
 extern absolute_time_t ctrl_disconnected_at;
-extern absolute_time_t last_command_at;
+extern absolute_time_t ctrl_last_command_at;
 
 static void gpio_irq_handler(uint gpio, uint32_t event) {
     if (event == (GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL)) {
@@ -120,8 +122,8 @@ int main() {
                 deep_sleep();
                 continue;
             }
-        } else if (last_command_at) {
-            time_diff = absolute_time_diff_us(last_command_at, now) / 1000;
+        } else if (ctrl_last_command_at) {
+            time_diff = absolute_time_diff_us(ctrl_last_command_at, now) / 1000;
             if (time_diff >= CTRL_CMD_TIMEOUT_MS) {
                 DEBUG("Going to sleep due to inactivity\n");
                 deep_sleep();
@@ -137,7 +139,7 @@ int main() {
                 DEBUG("Going to sleep\n");
                 if (deep_sleep() == -1) {
                     // Unable to re-initialize hardware
-                    panic("Unable to wake up from sleep!");
+                    panic("Unable to safely wake up from sleep!");
                     return -1;
                 }
 
@@ -171,8 +173,10 @@ int main() {
         }
 
         SLEEP:
-            sleep_ms(10);
+            sleep_ms(MICRO_SLEEP_MS);
     }
+    bt_deinit();
+    ctrl_deinit();
     cyw43_arch_deinit();
     return 0;
 }
