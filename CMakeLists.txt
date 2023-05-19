@@ -20,6 +20,7 @@ add_executable(hidremote
     buttons.c
     control.c
     hidremote.c
+    battery.c
 )
 
 pico_btstack_make_gatt_header(hidremote INTERFACE ${CMAKE_CURRENT_LIST_DIR}/hidremote.gatt)
@@ -35,6 +36,7 @@ target_link_libraries(hidremote
     pico_btstack_cyw43
     pico_cyw43_arch_none
     hardware_sleep
+    hardware_adc
     )
 
 if(DEFINED ENV{DEBUG_MODE})

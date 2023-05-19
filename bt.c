@@ -13,7 +13,6 @@ static queue_t *ctrl_ev_r_queue = NULL;
 
 static btstack_packet_callback_registration_t hci_event_callback_registration;
 static btstack_packet_callback_registration_t sm_event_callback_registration;
-static uint8_t battery = 100;
 static hci_con_handle_t con_handle = HCI_CON_HANDLE_INVALID;
 static uint8_t send_keycode;
 
@@ -94,7 +93,7 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
     }
 }
 
-void bt_init(queue_t *write_queue, queue_t *read_queue) {
+void bt_init(queue_t *write_queue, queue_t *read_queue, uint8_t battery_level) {
     ctrl_ev_w_queue = write_queue;
     ctrl_ev_r_queue = read_queue;
 
@@ -108,7 +107,7 @@ void bt_init(queue_t *write_queue, queue_t *read_queue) {
     att_server_init(profile_data, NULL, NULL);
 
     // setup battery service
-    battery_service_server_init(battery);
+    battery_service_server_init(battery_level);
 
     // setup device information service
     device_information_service_server_init();
@@ -157,6 +156,10 @@ void bt_deinit() {
     ctrl_ev_r_queue = NULL;
     con_handle = HCI_CON_HANDLE_INVALID;
     send_keycode = 0;
+}
+
+void bt_set_battery_level(uint8_t level) {
+    battery_service_server_set_battery_value(level);
 }
 
 void bt_process_queue() {
