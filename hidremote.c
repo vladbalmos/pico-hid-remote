@@ -10,6 +10,7 @@
 #include "buttons.h"
 #include "control.h"
 #include "battery.h"
+#include "leds.h"
 #include "debug.h"
 
 #define ADC_PIN 26
@@ -55,6 +56,7 @@ static int8_t deep_sleep() {
     uart_default_tx_wait_blocking();
     
     // Prepare for sleep
+    leds_turnoff();
     bt_deinit();
     cyw43_arch_deinit();
     ctrl_deinit();
@@ -108,6 +110,9 @@ int main() {
         gpio_set_dir(pins[i], GPIO_IN);
         gpio_set_irq_enabled_with_callback(pins[i], GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
     }
+
+    // Init leds
+    leds_init();
     
     queue_init(&ctrl_ev_w_queue, sizeof(ctrl_ev_t), 10);
     queue_init(&ctrl_ev_r_queue, sizeof(ctrl_ev_t), 10);
@@ -126,13 +131,16 @@ int main() {
     btn_create_array();
 
     DEBUG("Remote initialized\n");
+    leds_show_bt_connecting();
+    
     while (1) {
         bt_process_queue();
         ctrl_process_queue();
         now = get_absolute_time();
         now_s = to_ms_since_boot(now) / 1000;
         
-        if (bat_level <= 2) {
+        // Start checking battery level 10 seconds after boot
+        if (now_s > 10 && bat_level <= 2) {
             DEBUG("Battery low! Please recharge! Stopping!\n");
             uart_default_tx_wait_blocking();
             break;
@@ -143,6 +151,7 @@ int main() {
             if (time_diff >= CTRL_DEEP_SLEEP_TIMEOUT_MS) {
                 DEBUG("Going to sleep due to lack of remote connection\n");
                 deep_sleep();
+                leds_show_bt_connecting();
                 continue;
             }
         } else {
@@ -179,10 +188,11 @@ int main() {
                     panic("Unable to safely wake up from sleep!");
                     break;
                 }
-
-                DEBUG("Showing BT LED activity\n");
+                
+                leds_show_bt_connecting();
                 goto SLEEP;
             } else if (btn_is_double_press(btn)) {
+                leds_show_battery_level(bat_level);
                 DEBUG("Showing battery level\n");
             }
             goto SLEEP;
@@ -215,6 +225,7 @@ int main() {
     }
     
     // Stop everything
+    leds_turnoff();
     bt_deinit();
     ctrl_deinit();
     cyw43_arch_deinit();

@@ -11,7 +11,7 @@
 #define BTN_RELEASE 0
 
 #define DEBOUNCE_TIME_MS 25
-#define LONG_PRESS_TIME_MS 1000
+#define LONG_PRESS_TIME_MS 2000
 #define DOUBLE_PRESS_TIME_MS 150
 
 typedef struct {

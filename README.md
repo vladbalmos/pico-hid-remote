@@ -9,8 +9,8 @@ HID Bluetooth (BLE) Remote based on a Pico W.
 * TP5100 charging module
 * micro USB female
 * 1 x 18650 lithium battery
-* 1 x 3mm blue LED
-* 3 x 3mm red LED
+* 1 x 3mm blue LED + 10k resistor
+* 3 x 3mm red LED + 3 x 1k resistor
 * pico probe (optional)
 
 ## Software dependencies

@@ -21,6 +21,7 @@ add_executable(hidremote
     control.c
     hidremote.c
     battery.c
+    leds.c
 )
 
 pico_btstack_make_gatt_header(hidremote INTERFACE ${CMAKE_CURRENT_LIST_DIR}/hidremote.gatt)

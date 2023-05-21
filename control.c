@@ -1,8 +1,9 @@
 #include <stdlib.h>
 #include "pico/util/queue.h"
 #include "control.h"
+#include "leds.h"
 
-uint8_t ctrl_is_connected = 1;
+uint8_t ctrl_is_connected = 0;
 
 absolute_time_t ctrl_connected_at;
 absolute_time_t ctrl_disconnected_at;
@@ -48,7 +49,7 @@ void ctrl_process_queue() {
                 if (ctrl_is_connected) {
                     continue;
                 }
-
+                leds_hide_bt_connecting();
                 ctrl_is_connected = 1;
                 ctrl_connected_at = get_absolute_time();
                 ctrl_disconnected_at = nil_time;
@@ -59,6 +60,8 @@ void ctrl_process_queue() {
                 if (!ctrl_is_connected) {
                     continue;
                 }
+                
+                leds_show_bt_connecting();
                 ctrl_is_connected = 0;
                 ctrl_disconnected_at = get_absolute_time();
                 ctrl_connected_at = nil_time;
