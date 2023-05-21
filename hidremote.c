@@ -152,7 +152,7 @@ int main() {
         }
         
         // Start checking battery level 10 seconds after boot
-        if (now_s > 10 && bat_level <= 2) {
+        if (now_s > 10 && bat_level <= 1) {
             DEBUG("Battery low! Please recharge! Stopping!\n");
             uart_default_tx_wait_blocking();
             break;
@@ -212,7 +212,6 @@ int main() {
 
         btn = btn_get(PLAY_CTRL_BTN_PIN);
         if (btn_is_pressed(btn)) {
-            DEBUG("Bat: %d\n", battery_level())
             btn_handled(btn, now);
             ctrl_toggle_play_pause();
             goto SLEEP;
