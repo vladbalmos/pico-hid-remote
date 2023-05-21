@@ -17,6 +17,8 @@
 #define MICRO_SLEEP_MS 10
 #define BATTERY_CHECK_INTERVAL_S 10
 
+#define CHARGE_PIN 6
+
 static uint8_t pins[] = {FN_BTN_PIN, PLAY_CTRL_BTN_PIN, VOL_UP_BTN_PIN, VOL_DOWN_BTN_PIN};
 static queue_t ctrl_ev_w_queue;
 static queue_t ctrl_ev_r_queue;
@@ -104,12 +106,16 @@ int main() {
         return -1;
     }
     
-    // Init gpio pins
+    // Init buttons gpio pins
     for (uint8_t i = 0; i < 4; i++) {
         gpio_init(pins[i]);
         gpio_set_dir(pins[i], GPIO_IN);
         gpio_set_irq_enabled_with_callback(pins[i], GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
     }
+    
+    // Init charge pin
+    gpio_init(CHARGE_PIN);
+    gpio_set_dir(CHARGE_PIN, GPIO_IN);
 
     // Init leds
     leds_init();
@@ -138,6 +144,12 @@ int main() {
         ctrl_process_queue();
         now = get_absolute_time();
         now_s = to_ms_since_boot(now) / 1000;
+
+        if (gpio_get(CHARGE_PIN)) {
+            DEBUG("Started battery charging. Stopping!\n");
+            uart_default_tx_wait_blocking();
+            break;
+        }
         
         // Start checking battery level 10 seconds after boot
         if (now_s > 10 && bat_level <= 2) {
