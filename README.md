@@ -10,7 +10,8 @@ HID Bluetooth (BLE) Remote based on a Pico W.
 * micro USB female
 * 1 x 18650 lithium battery
 * 1 x 3mm blue LED + 10k resistor
-* 3 x 3mm green LED + 3 x 1k resistor
+* 3 x 3mm green LED + 3 x 1k resistors
+* 2 x 100k resistors
 * pico probe (optional)
 
 ## Software dependencies
