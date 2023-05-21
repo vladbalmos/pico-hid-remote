@@ -88,7 +88,7 @@ void leds_show_battery_level(uint8_t level) {
 
     hide_battery_level_alarm = add_alarm_in_ms(HIDE_BAT_LEVEL_TIMEOUT_MS, hide_battery_level, NULL, false);
     
-    if (level < 5) {
+    if (level <= 5) {
         led_bat_indicator_on = 1;
         flash_battery_level_alarm = add_alarm_in_ms(FLASH_LED_INTERVAL, flash_battery_level, NULL, false);
     }

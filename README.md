@@ -61,8 +61,8 @@ Once paired, the device will go to sleep if no button press was detected in 10 m
 
 * blue
     - flashes while not connected and in pairing mode
-    - stable for 5 seconds after pairing
+    - off once paired
     
 * 3 x red
     - show battery level
-    - if battery level < 5% the last led in will flash for 5 seconds
+    - if battery level <= 5% the last led in will flash for 5 seconds
