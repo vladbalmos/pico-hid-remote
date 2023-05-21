@@ -4,8 +4,8 @@
 #include "debug.h"
 
 #define BATTERY_ADC_CONVERSION_FACTOR 3.3f / (1 << 12)
-#define BATTERY_MAX_VOLTAGE 4.15
-#define BATTERY_MIN_VOLTAGE 3.1
+#define BATTERY_MAX_VOLTAGE 4.0
+#define BATTERY_MIN_VOLTAGE 3.0
 
 static const float battery_max_voltage_drop = BATTERY_MAX_VOLTAGE - BATTERY_MIN_VOLTAGE;
 
