@@ -184,6 +184,7 @@ int main() {
                 if (time_diff >= CTRL_CMD_TIMEOUT_MS) {
                     DEBUG("Going to sleep due to inactivity\n");
                     deep_sleep();
+                    leds_show_bt_connecting();
                     continue;
                 }
             }
