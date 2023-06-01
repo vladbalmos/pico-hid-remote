@@ -18,7 +18,7 @@ void battery_init(uint8_t adc_pin) {
 
 uint8_t battery_level() {
     uint16_t result = adc_read();
-    float voltage = result * BATTERY_ADC_CONVERSION_FACTOR * 2 + .4; // .15 accounts for resistor divider inaccuracy
+    float voltage = result * BATTERY_ADC_CONVERSION_FACTOR * 2 + .4; // .4 accounts for resistor divider inaccuracy
 
     DEBUG("Battery voltage: %f\n", voltage);
     if (voltage < BATTERY_MIN_VOLTAGE) {
