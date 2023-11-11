@@ -1,5 +1,5 @@
 PRIMARY_SERVICE, GAP_SERVICE
-CHARACTERISTIC, GAP_DEVICE_NAME, READ, "Pico HIDRemote"
+CHARACTERISTIC, GAP_DEVICE_NAME, READ, "Pico HIDRemote V2"
 
 // add Battery Service
 #import <battery_service.gatt>
