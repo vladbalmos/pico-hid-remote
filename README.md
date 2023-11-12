@@ -8,7 +8,8 @@ HID Bluetooth (BLE) Remote based on a Pico W.
 * 5 x micro switches
 * TP5100 charging module
 * micro USB female
-* 1 x 18650 lithium battery
+* 1 x 18650 lithium battery (for the V1 enclosure)
+* 1 x blackberry q10 lithium battery (for the V2 enclosure)
 * 1 x 3mm blue LED + 10k resistor
 * 3 x 3mm green LED + 3 x 1k resistors
 * 2 x 100k resistors
