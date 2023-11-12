@@ -2,6 +2,9 @@
 
 HID Bluetooth (BLE) Remote based on a Pico W.
 
+![case-v2-cover](https://github.com/vladbalmos/pico-hid-remote/assets/1618554/9cbbbed7-1e5c-44dd-ad58-84280bf5394b)
+
+
 ## Hardware requirements
 
 * Pico W
@@ -21,6 +24,7 @@ HID Bluetooth (BLE) Remote based on a Pico W.
 * pico-extras
 * opencd (optional)
 * pico probe (optional)
+
 
 
 ## Build
